@@ -1,0 +1,15 @@
+{
+    "name": "task-priority-ranker",
+    "version": "1.0.0",
+    "description": "An Obsidian plugin to rank tasks interactively.",
+    "main": "main.js",
+    "scripts": {
+        "build": "tsc"
+    },
+    "author": "Your Name",
+    "license": "MIT",
+    "devDependencies": {
+        "typescript": "^4.5.5",
+        "obsidian": "latest"
+    }
+}
