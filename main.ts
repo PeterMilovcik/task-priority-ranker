@@ -47,6 +47,21 @@ export default class TaskPriorityRanker extends Plugin {
                 this.openRankingUI();
             },
         });
+        
+        // Add a new ribbon icon and command for the task list view
+        this.addRibbonIcon("list", "Open Task List View", () => {
+            console.log("🔹 Task List View opened via Ribbon icon.");
+            this.openTaskListUI();
+        });
+
+        this.addCommand({
+            id: "open-task-list-view",
+            name: "Open Task List View",
+            callback: () => {
+                console.log("🔹 Task List View opened via Command Palette.");
+                this.openTaskListUI();
+            },
+        });
     }
 
     async openRankingUI() {
@@ -154,6 +169,12 @@ export default class TaskPriorityRanker extends Plugin {
     async createTaskComparisonUI() {
         console.log("📌 Opening Task Ranking Modal...");
         const modal = new TaskRankingModal(this.app, this);
+        modal.open();
+    }
+
+    async openTaskListUI() {
+        console.log("📌 Opening Task List View...");
+        const modal = new TaskListModal(this.app, this);
         modal.open();
     }
 }
@@ -287,4 +308,144 @@ class TaskRankingModal extends Modal {
         // Ensure it's at the bottom of the modal
         this.contentEl.appendChild(this.progressInfoElement);
     }             
+}
+
+class TaskListModal extends Modal {
+    plugin: TaskPriorityRanker;
+    tasks: Task[] = [];
+
+    constructor(app: any, plugin: TaskPriorityRanker) {
+        super(app);
+        this.plugin = plugin;
+        this.modalEl.style.width = "1200px";
+    }
+
+    async onOpen() {
+        console.log("📌 Task list modal opened.");
+        await this.refreshAndDisplay();
+    }
+
+    async refreshAndDisplay() {
+        console.log("🔄 Refreshing task list...");
+        this.tasks = await this.plugin.getTasks();
+        
+        // Sort tasks by priority from highest to lowest
+        this.tasks.sort((a, b) => b.getPriority() - a.getPriority());
+        
+        console.log("📌 Updated tasks for listing:", this.tasks);
+        this.displayTaskList();
+    }
+
+    displayTaskList() {
+        this.contentEl.empty();
+        
+        // Create heading
+        this.contentEl.createEl("h2", { text: "Task Priority List", cls: "task-list-header" });
+        
+        // Create table
+        const tableContainer = this.contentEl.createDiv({ cls: "task-table-container" });
+        const table = tableContainer.createEl("table", { cls: "task-table" });
+        
+        // Create table header
+        const thead = table.createEl("thead");
+        const headerRow = thead.createEl("tr");
+        headerRow.createEl("th", { text: "Move Up" });
+        headerRow.createEl("th", { text: "Move Down" });
+        headerRow.createEl("th", { text: "Priority" });
+        headerRow.createEl("th", { text: "Task" });
+        headerRow.createEl("th", { text: "Note" });
+        
+        // Create table body
+        const tbody = table.createEl("tbody");
+        
+        // Add task rows
+        this.tasks.forEach((task, index) => {
+            const row = tbody.createEl("tr");
+            
+            // Up button cell
+            const upCell = row.createEl("td");
+            const upButton = upCell.createEl("button", { text: "⬆️", cls: "task-move-button" });
+            upButton.onclick = async () => {
+                await this.handleMoveUp(index);
+            };
+            
+            // Down button cell
+            const downCell = row.createEl("td");
+            const downButton = downCell.createEl("button", { text: "⬇️", cls: "task-move-button" });
+            downButton.onclick = async () => {
+                await this.handleMoveDown(index);
+            };
+            
+            // Priority cell
+            row.createEl("td", { text: `${task.getPriority()}`, cls: "task-priority" });
+            
+            // Task text cell
+            const taskText = task.text
+                .replace(/\[priority::\s*\d+\]/g, '')
+                .replace(/^- \[ \]\s*/, '');
+            row.createEl("td", { text: taskText, cls: "task-text" });
+            
+            // Note title cell
+            const taskFileName = task.path.split("/").pop()?.replace(".md", "") || "Unknown Note";
+            row.createEl("td", { text: taskFileName, cls: "task-note" });
+        });
+        
+        this.contentEl.appendChild(tableContainer);
+    }
+    
+    async handleMoveUp(index: number) {
+        console.log(`🔼 Moving task at index ${index} up`);
+        
+        if (index <= 0) {
+            console.log("Task is already at the top, no action needed");
+            return;
+        }
+        
+        const currentTask = this.tasks[index];
+        const aboveTask = this.tasks[index - 1];
+        
+        // Get current priorities
+        const currentPriority = currentTask.getPriority();
+        const abovePriority = aboveTask.getPriority();
+        
+        if (currentPriority === abovePriority) {
+            // If same priority, increase this task's priority by 1
+            await this.plugin.updateTaskPriority(currentTask, currentPriority + 1);
+        } else {
+            // Swap priorities
+            await this.plugin.updateTaskPriority(currentTask, abovePriority);
+            await this.plugin.updateTaskPriority(aboveTask, currentPriority);
+        }
+        
+        // Refresh the display
+        await this.refreshAndDisplay();
+    }
+    
+    async handleMoveDown(index: number) {
+        console.log(`🔽 Moving task at index ${index} down`);
+        
+        if (index >= this.tasks.length - 1) {
+            console.log("Task is already at the bottom, no action needed");
+            return;
+        }
+        
+        const currentTask = this.tasks[index];
+        const belowTask = this.tasks[index + 1];
+        
+        // Get current priorities
+        const currentPriority = currentTask.getPriority();
+        const belowPriority = belowTask.getPriority();
+        
+        if (currentPriority === belowPriority) {
+            // If same priority, decrease this task's priority by 1
+            await this.plugin.updateTaskPriority(currentTask, currentPriority - 1);
+        } else {
+            // Swap priorities
+            await this.plugin.updateTaskPriority(currentTask, belowPriority);
+            await this.plugin.updateTaskPriority(belowTask, currentPriority);
+        }
+        
+        // Refresh the display
+        await this.refreshAndDisplay();
+    }
 }

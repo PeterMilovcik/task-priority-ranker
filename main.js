@@ -47,6 +47,19 @@ class TaskPriorityRanker extends obsidian_1.Plugin {
                     this.openRankingUI();
                 },
             });
+            // Add a new ribbon icon and command for the task list view
+            this.addRibbonIcon("list", "Open Task List View", () => {
+                console.log("🔹 Task List View opened via Ribbon icon.");
+                this.openTaskListUI();
+            });
+            this.addCommand({
+                id: "open-task-list-view",
+                name: "Open Task List View",
+                callback: () => {
+                    console.log("🔹 Task List View opened via Command Palette.");
+                    this.openTaskListUI();
+                },
+            });
         });
     }
     openRankingUI() {
@@ -133,6 +146,13 @@ class TaskPriorityRanker extends obsidian_1.Plugin {
         return __awaiter(this, void 0, void 0, function* () {
             console.log("📌 Opening Task Ranking Modal...");
             const modal = new TaskRankingModal(this.app, this);
+            modal.open();
+        });
+    }
+    openTaskListUI() {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log("📌 Opening Task List View...");
+            const modal = new TaskListModal(this.app, this);
             modal.open();
         });
     }
@@ -244,5 +264,125 @@ class TaskRankingModal extends obsidian_2.Modal {
         }
         // Ensure it's at the bottom of the modal
         this.contentEl.appendChild(this.progressInfoElement);
+    }
+}
+class TaskListModal extends obsidian_2.Modal {
+    constructor(app, plugin) {
+        super(app);
+        this.tasks = [];
+        this.plugin = plugin;
+        this.modalEl.style.width = "1200px";
+    }
+    onOpen() {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log("📌 Task list modal opened.");
+            yield this.refreshAndDisplay();
+        });
+    }
+    refreshAndDisplay() {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log("🔄 Refreshing task list...");
+            this.tasks = yield this.plugin.getTasks();
+            // Sort tasks by priority from highest to lowest
+            this.tasks.sort((a, b) => b.getPriority() - a.getPriority());
+            console.log("📌 Updated tasks for listing:", this.tasks);
+            this.displayTaskList();
+        });
+    }
+    displayTaskList() {
+        this.contentEl.empty();
+        // Create heading
+        this.contentEl.createEl("h2", { text: "Task Priority List", cls: "task-list-header" });
+        // Create table
+        const tableContainer = this.contentEl.createDiv({ cls: "task-table-container" });
+        const table = tableContainer.createEl("table", { cls: "task-table" });
+        // Create table header
+        const thead = table.createEl("thead");
+        const headerRow = thead.createEl("tr");
+        headerRow.createEl("th", { text: "Move Up" });
+        headerRow.createEl("th", { text: "Move Down" });
+        headerRow.createEl("th", { text: "Priority" });
+        headerRow.createEl("th", { text: "Task" });
+        headerRow.createEl("th", { text: "Note" });
+        // Create table body
+        const tbody = table.createEl("tbody");
+        // Add task rows
+        this.tasks.forEach((task, index) => {
+            var _a;
+            const row = tbody.createEl("tr");
+            // Up button cell
+            const upCell = row.createEl("td");
+            const upButton = upCell.createEl("button", { text: "⬆️", cls: "task-move-button" });
+            upButton.onclick = () => __awaiter(this, void 0, void 0, function* () {
+                yield this.handleMoveUp(index);
+            });
+            // Down button cell
+            const downCell = row.createEl("td");
+            const downButton = downCell.createEl("button", { text: "⬇️", cls: "task-move-button" });
+            downButton.onclick = () => __awaiter(this, void 0, void 0, function* () {
+                yield this.handleMoveDown(index);
+            });
+            // Priority cell
+            row.createEl("td", { text: `${task.getPriority()}`, cls: "task-priority" });
+            // Task text cell
+            const taskText = task.text
+                .replace(/\[priority::\s*\d+\]/g, '')
+                .replace(/^- \[ \]\s*/, '');
+            row.createEl("td", { text: taskText, cls: "task-text" });
+            // Note title cell
+            const taskFileName = ((_a = task.path.split("/").pop()) === null || _a === void 0 ? void 0 : _a.replace(".md", "")) || "Unknown Note";
+            row.createEl("td", { text: taskFileName, cls: "task-note" });
+        });
+        this.contentEl.appendChild(tableContainer);
+    }
+    handleMoveUp(index) {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log(`🔼 Moving task at index ${index} up`);
+            if (index <= 0) {
+                console.log("Task is already at the top, no action needed");
+                return;
+            }
+            const currentTask = this.tasks[index];
+            const aboveTask = this.tasks[index - 1];
+            // Get current priorities
+            const currentPriority = currentTask.getPriority();
+            const abovePriority = aboveTask.getPriority();
+            if (currentPriority === abovePriority) {
+                // If same priority, increase this task's priority by 1
+                yield this.plugin.updateTaskPriority(currentTask, currentPriority + 1);
+            }
+            else {
+                // Swap priorities
+                yield this.plugin.updateTaskPriority(currentTask, abovePriority);
+                yield this.plugin.updateTaskPriority(aboveTask, currentPriority);
+            }
+            // Refresh the display
+            yield this.refreshAndDisplay();
+        });
+    }
+    handleMoveDown(index) {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log(`🔽 Moving task at index ${index} down`);
+            if (index >= this.tasks.length - 1) {
+                console.log("Task is already at the bottom, no action needed");
+                return;
+            }
+            const currentTask = this.tasks[index];
+            const belowTask = this.tasks[index + 1];
+            // Get current priorities
+            const currentPriority = currentTask.getPriority();
+            const belowPriority = belowTask.getPriority();
+            if (currentPriority === belowPriority) {
+                // If same priority, decrease this task's priority by 1
+                yield this.plugin.updateTaskPriority(currentTask, currentPriority - 1);
+            }
+            else {
+                // Swap priorities
+                yield this.plugin.updateTaskPriority(currentTask, belowPriority);
+                yield this.plugin.updateTaskPriority(belowTask, currentPriority);
+            }
+            // Refresh the display
+            yield this.refreshAndDisplay();
+        });
     }
 }
